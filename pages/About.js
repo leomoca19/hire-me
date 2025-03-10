@@ -2,7 +2,8 @@ export default function About() {
   return (
     <>
       <p>
-        My name is Leonardo Caceres <br />
+        My name is Leonardo Caceres
+        <br />
         I am a passionate software develpoer in the middle of a Bachelor&apos;s
         degree in software development at Seneca polytechnic
         <br />

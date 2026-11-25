@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChronoGrid — Multi-Stopwatch Tracker</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#151e32',
+                            950: '#090d16',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Tabular numerals ensure zero horizontal jitter during rapid updates */
+        .tabular-nums-strict {
+            font-variant-numeric: tabular-nums;
+        }
+        /* Custom subtle scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.3);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(148, 163, 184, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200 selection:bg-indigo-500 selection:text-white">
+
+    <!-- Top Navigation & Global Controls Header -->
+    <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                
+                <!-- Brand & Active Counter -->
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/25">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold tracking-tight flex items-center gap-2">
+                                ChronoGrid
+                                <span id="active-badge" class="hidden text-xs font-medium px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                    0 active
+                                </span>
+                            </h1>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Multi-day persistent precision stopwatches</p>
+                        </div>
+                    </div>
+
+                    <!-- Mobile Theme Toggle -->
+                    <button id="theme-toggle-mobile" aria-label="Toggle Theme" class="md:hidden p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                        <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                        <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    </button>
+                </div>
+
+                <!-- Global Action Bar -->
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <button id="btn-pause-all" class="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span>Pause All</span>
+                    </button>
+
+                    <button id="btn-reset-all" class="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50 dark:hover:text-rose-400 disabled:opacity-40 disabled:pointer-events-none transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        <span>Reset All</span>
+                    </button>
+
+                    <button id="btn-open-modal" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+                        <span>New Stopwatch</span>
+                    </button>
+
+                    <!-- Desktop Theme Toggle -->
+                    <button id="theme-toggle-desktop" aria-label="Toggle Theme" class="hidden md:inline-flex p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                        <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                        <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Quick Add Inline Bar -->
+        <form id="quick-add-form" class="mb-8 bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row gap-3">
+            <input 
+                type="text" 
+                id="quick-name" 
+                placeholder="Stopwatch name (e.g., Fasting Timer, Server Uptime, Sprint #4)..." 
+                required
+                maxlength="60"
+                class="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+            >
+            <input 
+                type="text" 
+                id="quick-desc" 
+                placeholder="Optional description or notes..." 
+                maxlength="160"
+                class="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+            >
+            <button type="submit" class="px-5 py-2.5 rounded-xl bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 text-white text-sm font-semibold transition whitespace-nowrap shadow-sm">
+                + Add Timer
+            </button>
+        </form>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="hidden text-center py-20 px-4 bg-white dark:bg-slate-900/50 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <h2 class="text-lg font-semibold mb-1">No stopwatches yet</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-6">
+                Create a stopwatch above to start tracking durations from seconds all the way up to days. Your progress is automatically saved locally.
+            </p>
+            <button id="btn-empty-create" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition">
+                Create First Stopwatch
+            </button>
+        </div>
+
+        <!-- Responsive Stopwatch Grid -->
+        <div id="stopwatch-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <!-- Stopwatch cards are dynamically injected here -->
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-200 dark:border-slate-800/80 py-6 text-center text-xs text-slate-500 dark:text-slate-400">
+        <p>Timestamp-accurate tracking • Survives browser reloads &amp; background tab throttling</p>
+    </footer>
+
+    <!-- Add / Edit Stopwatch Modal -->
+    <div id="stopwatch-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl transform transition-all">
+            <div class="flex items-center justify-between mb-5">
+                <h3 id="modal-title" class="text-lg font-bold">New Stopwatch</h3>
+                <button id="modal-close" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <form id="modal-form" class="space-y-4">
+                <input type="hidden" id="modal-edit-id" value="">
+                <div>
+                    <label for="modal-name" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                        Stopwatch Name <span class="text-rose-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="modal-name" 
+                        required 
+                        maxlength="60"
+                        placeholder="e.g., Deep Work Session"
+                        class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                </div>
+                <div>
+                    <label for="modal-desc" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                        Description <span class="text-slate-400 font-normal lowercase">(optional)</span>
+                    </label>
+                    <textarea 
+                        id="modal-desc" 
+                        rows="3" 
+                        maxlength="240"
+                        placeholder="Add context, goals, or notes for this timer..."
+                        class="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                    ></textarea>
+                </div>
+                <div id="modal-autostart-wrap" class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="modal-autostart" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950">
+                    <label for="modal-autostart" class="text-sm text-slate-600 dark:text-slate-300 select-none">Start timer immediately</label>
+                </div>
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" id="modal-cancel" class="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                        Cancel
+                    </button>
+                    <button type="submit" id="modal-submit-btn" class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 transition">
+                        Create Stopwatch
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal (Replaces native confirm/alert) -->
+    <div id="confirm-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl">
+            <h3 id="confirm-title" class="text-lg font-bold mb-2">Confirm Action</h3>
+            <p id="confirm-message" class="text-sm text-slate-600 dark:text-slate-400 mb-6">Are you sure you want to proceed?</p>
+            <div class="flex items-center justify-end gap-3">
+                <button id="confirm-cancel" class="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                    Cancel
+                </button>
+                <button id="confirm-ok" class="px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white transition">
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <script>
+        /**
+         * ChronoGrid Application Logic
+         * Uses timestamp delta tracking (Date.now()) so elapsed time remains 100% accurate
+         * across page reloads, device sleep, and background browser tab throttling.
+         */
+        (() => {
+            const STORAGE_KEY = 'chronogrid_stopwatches_v1';
+            const THEME_KEY = 'chronogrid_theme_v1';
+
+            // Application State
+            let stopwatches = [];
+            let animationFrameId = null;
+            let confirmCallback = null;
+
+            // DOM References
+            const gridEl = document.getElementById('stopwatch-grid');
+            const emptyStateEl = document.getElementById('empty-state');
+            const activeBadgeEl = document.getElementById('active-badge');
+            const btnPauseAll = document.getElementById('btn-pause-all');
+            const btnResetAll = document.getElementById('btn-reset-all');
+
+            // Quick Add Form
+            const quickAddForm = document.getElementById('quick-add-form');
+            const quickNameInput = document.getElementById('quick-name');
+            const quickDescInput = document.getElementById('quick-desc');
+
+            // Add/Edit Modal
+            const modal = document.getElementById('stopwatch-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalForm = document.getElementById('modal-form');
+            const modalEditId = document.getElementById('modal-edit-id');
+            const modalName = document.getElementById('modal-name');
+            const modalDesc = document.getElementById('modal-desc');
+            const modalAutostartWrap = document.getElementById('modal-autostart-wrap');
+            const modalAutostart = document.getElementById('modal-autostart');
+            const modalSubmitBtn = document.getElementById('modal-submit-btn');
+
+            // Confirm Modal
+            const confirmModal = document.getElementById('confirm-modal');
+            const confirmTitle = document.getElementById('confirm-title');
+            const confirmMessage = document.getElementById('confirm-message');
+            const confirmOkBtn = document.getElementById('confirm-ok');
+            const confirmCancelBtn = document.getElementById('confirm-cancel');
+
+            /**
+             * Initialize Theme from LocalStorage or System Preference
+             */
+            function initTheme() {
+                const savedTheme = localStorage.getItem(THEME_KEY);
+                if (savedTheme === 'light') {
+                    document.documentElement.classList.remove('dark');
+                } else {
+                    document.documentElement.classList.add('dark');
+                }
+            }
+
+            function toggleTheme() {
+                const isDark = document.documentElement.classList.toggle('dark');
+                localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+            }
+
+            /**
+             * Load and Save State to LocalStorage
+             */
+            function loadState() {
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    if (raw) {
+                        const parsed = JSON.parse(raw);
+                        if (Array.isArray(parsed)) {
+                            stopwatches = parsed;
+                            return;
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to load stopwatches from storage:', err);
+                }
+
+                // Seed with a helpful starter stopwatch on first visit
+                stopwatches = [
+                    {
+                        id: generateId(),
+                        name: 'Project Sprint Timer',
+                        description: 'Tracks cumulative active development time across days.',
+                        accumulatedMs: 0,
+                        lastStartedAt: null,
+                        isRunning: false,
+                        createdAt: Date.now()
+                    }
+                ];
+                saveState();
+            }
+
+            function saveState() {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(stopwatches));
+                } catch (err) {
+                    console.error('Failed to save stopwatches:', err);
+                }
+            }
+
+            /**
+             * Utility: Generate unique ID
+             */
+            function generateId() {
+                return 'sw_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 7);
+            }
+
+            /**
+             * Utility: Escape HTML to prevent XSS on user inputs
+             */
+            function escapeHTML(str) {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
+
+            /**
+             * Calculate true elapsed milliseconds for a stopwatch
+             */
+            function getElapsedMs(sw) {
+                if (sw.isRunning && sw.lastStartedAt) {
+                    return sw.accumulatedMs + Math.max(0, Date.now() - sw.lastStartedAt);
+                }
+                return sw.accumulatedMs;
+            }
+
+            /**
+             * Break milliseconds down into Days, Hours, Minutes, Seconds, and Centiseconds
+             */
+            function formatTimeParts(totalMs) {
+                const totalSeconds = Math.floor(totalMs / 1000);
+                const days = Math.floor(totalSeconds / 86400);
+                const hours = Math.floor((totalSeconds % 86400) / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
+                const centiseconds = Math.floor((totalMs % 1000) / 10);
+
+                return {
+                    days: String(days).padStart(2, '0'),
+                    hours: String(hours).padStart(2, '0'),
+                    minutes: String(minutes).padStart(2, '0'),
+                    seconds: String(seconds).padStart(2, '0'),
+                    centiseconds: String(centiseconds).padStart(2, '0'),
+                    hasDays: days > 0
+                };
+            }
+
+            /**
+             * Show non-intrusive toast message
+             */
+            function showToast(message) {
+                const container = document.getElementById('toast-container');
+                const toast = document.createElement('div');
+                toast.className = 'px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-800 text-white text-xs font-medium shadow-lg border border-slate-700/70 transform transition-all duration-300 translate-y-2 opacity-0';
+                toast.textContent = message;
+                container.appendChild(toast);
+
+                requestAnimationFrame(() => {
+                    toast.classList.remove('translate-y-2', 'opacity-0');
+                });
+
+                setTimeout(() => {
+                    toast.classList.add('translate-y-2', 'opacity-0');
+                    setTimeout(() => toast.remove(), 300);
+                }, 2600);
+            }
+
+            /**
+             * Custom Confirmation Dialog
+             */
+            function openConfirm({ title, message, confirmText = 'Confirm', isDanger = true, onConfirm }) {
+                confirmTitle.textContent = title;
+                confirmMessage.textContent = message;
+                confirmOkBtn.textContent = confirmText;
+                confirmOkBtn.className = isDanger
+                    ? 'px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white transition'
+                    : 'px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition';
+                
+                confirmCallback = onConfirm;
+                confirmModal.classList.remove('hidden');
+                confirmModal.classList.add('flex');
+            }
+
+            function closeConfirm() {
+                confirmModal.classList.add('hidden');
+                confirmModal.classList.remove('flex');
+                confirmCallback = null;
+            }
+
+            /**
+             * CRUD & Timer Control Operations
+             */
+            function createStopwatch(name, description = '', autoStart = false) {
+                const now = Date.now();
+                const newSw = {
+                    id: generateId(),
+                    name: name.trim() || 'Untitled Stopwatch',
+                    description: description.trim(),
+                    accumulatedMs: 0,
+                    lastStartedAt: autoStart ? now : null,
+                    isRunning: autoStart,
+                    createdAt: now
+                };
+                stopwatches.unshift(newSw);
+                saveState();
+                renderGrid();
+                showToast(`Added "${newSw.name}"`);
+            }
+
+            function updateStopwatchDetails(id, name, description) {
+                const sw = stopwatches.find(item => item.id === id);
+                if (!sw) return;
+                sw.name = name.trim() || 'Untitled Stopwatch';
+                sw.description = description.trim();
+                saveState();
+                renderGrid();
+                showToast('Stopwatch updated');
+            }
+
+            function toggleStopwatch(id) {
+                const sw = stopwatches.find(item => item.id === id);
+                if (!sw) return;
+
+                const now = Date.now();
+                if (sw.isRunning) {
+                    // Pause: lock in accumulated time
+                    sw.accumulatedMs += Math.max(0, now - sw.lastStartedAt);
+                    sw.lastStartedAt = null;
+                    sw.isRunning = false;
+                } else {
+                    // Play: record exact start timestamp
+                    sw.lastStartedAt = now;
+                    sw.isRunning = true;
+                }
+                saveState();
+                renderGrid();
+            }
+
+            function resetStopwatch(id) {
+                const sw = stopwatches.find(item => item.id === id);
+                if (!sw) return;
+
+                const elapsed = getElapsedMs(sw);
+                if (elapsed === 0 && !sw.isRunning) return;
+
+                const performReset = () => {
+                    sw.accumulatedMs = 0;
+                    sw.lastStartedAt = null;
+                    sw.isRunning = false;
+                    saveState();
+                    renderGrid();
+                    showToast(`Reset "${sw.name}"`);
+                };
+
+                // Ask confirmation if elapsed time is over 10 seconds to prevent accidental loss
+                if (elapsed > 10000) {
+                    openConfirm({
+                        title: 'Reset Stopwatch?',
+                        message: `Reset "${sw.name}" back to 00d 00:00:00? This cannot be undone.`,
+                        confirmText: 'Reset Timer',
+                        onConfirm: performReset
+                    });
+                } else {
+                    performReset();
+                }
+            }
+
+            function deleteStopwatch(id) {
+                const sw = stopwatches.find(item => item.id === id);
+                if (!sw) return;
+
+                openConfirm({
+                    title: 'Delete Stopwatch?',
+                    message: `Remove "${sw.name}" permanently?`,
+                    confirmText: 'Delete',
+                    onConfirm: () => {
+                        stopwatches = stopwatches.filter(item => item.id !== id);
+                        saveState();
+                        renderGrid();
+                        showToast(`Deleted "${sw.name}"`);
+                    }
+                });
+            }
+
+            function pauseAllStopwatches() {
+                const now = Date.now();
+                let count = 0;
+                stopwatches.forEach(sw => {
+                    if (sw.isRunning) {
+                        sw.accumulatedMs += Math.max(0, now - sw.lastStartedAt);
+                        sw.lastStartedAt = null;
+                        sw.isRunning = false;
+                        count++;
+                    }
+                });
+                if (count > 0) {
+                    saveState();
+                    renderGrid();
+                    showToast(`Paused ${count} stopwatch${count > 1 ? 'es' : ''}`);
+                }
+            }
+
+            function resetAllStopwatches() {
+                if (stopwatches.length === 0) return;
+                openConfirm({
+                    title: 'Reset All Stopwatches?',
+                    message: 'This will pause and zero out every stopwatch on your board.',
+                    confirmText: 'Reset All',
+                    onConfirm: () => {
+                        stopwatches.forEach(sw => {
+                            sw.accumulatedMs = 0;
+                            sw.lastStartedAt = null;
+                            sw.isRunning = false;
+                        });
+                        saveState();
+                        renderGrid();
+                        showToast('All stopwatches reset');
+                    }
+                });
+            }
+
+            /**
+             * Render the Grid of Stopwatch Cards
+             */
+            function renderGrid() {
+                const runningCount = stopwatches.filter(sw => sw.isRunning).length;
+
+                // Update Header Badges & Global Buttons
+                if (runningCount > 0) {
+                    activeBadgeEl.textContent = `${runningCount} active`;
+                    activeBadgeEl.classList.remove('hidden');
+                } else {
+                    activeBadgeEl.classList.add('hidden');
+                }
+
+                btnPauseAll.disabled = runningCount === 0;
+                btnResetAll.disabled = stopwatches.length === 0;
+
+                // Toggle Empty State vs Grid
+                if (stopwatches.length === 0) {
+                    gridEl.innerHTML = '';
+                    emptyStateEl.classList.remove('hidden');
+                    return;
+                } else {
+                    emptyStateEl.classList.add('hidden');
+                }
+
+                // Render Cards
+                gridEl.innerHTML = stopwatches.map(sw => {
+                    const elapsed = getElapsedMs(sw);
+                    const t = formatTimeParts(elapsed);
+                    const isRunning = sw.isRunning;
+
+                    const cardBorder = isRunning
+                        ? 'border-indigo-500/70 dark:border-indigo-500/60 ring-2 ring-indigo-500/15'
+                        : 'border-slate-200 dark:border-slate-800';
+
+                    const statusDot = isRunning
+                        ? `<span class="relative flex h-2.5 w-2.5">
+                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                             <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                           </span>`
+                        : `<span class="inline-flex rounded-full h-2.5 w-2.5 bg-slate-300 dark:bg-slate-700"></span>`;
+
+                    return `
+                        <article data-id="${sw.id}" class="sw-card group relative flex flex-col justify-between bg-white dark:bg-slate-900 rounded-2xl border ${cardBorder} p-5 sm:p-6 shadow-sm hover:shadow-md transition-all duration-200">
+                            
+                            <!-- Card Header: Status, Title, Description & Edit/Delete -->
+                            <div>
+                                <div class="flex items-start justify-between gap-3 mb-2">
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        ${statusDot}
+                                        <h2 class="sw-title text-base sm:text-lg font-bold truncate cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition" title="Click to edit details">
+                                            ${escapeHTML(sw.name)}
+                                        </h2>
+                                    </div>
+                                    
+                                    <div class="flex items-center gap-1 shrink-0">
+                                        <button type="button" data-action="edit" title="Edit name & description" class="p-2 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                        </button>
+                                        <button type="button" data-action="delete" title="Delete stopwatch" class="p-2 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                ${sw.description 
+                                    ? `<p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 line-clamp-2 mb-5">${escapeHTML(sw.description)}</p>` 
+                                    : `<p class="text-xs text-slate-400/70 dark:text-slate-600 italic mb-5">No description</p>`
+                                }
+                            </div>
+
+                            <!-- High-Precision Days / Hours / Minutes / Seconds Display -->
+                            <div class="my-2 p-4 rounded-xl bg-slate-50 dark:bg-slate-950/90 border border-slate-200/80 dark:border-slate-800/90">
+                                <div class="grid grid-cols-4 gap-2 text-center font-mono tabular-nums-strict">
+                                    <div class="flex flex-col">
+                                        <span data-unit="days" class="text-2xl sm:text-3xl font-bold tracking-tight ${t.hasDays ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-800 dark:text-slate-100'}">${t.days}</span>
+                                        <span class="text-[10px] font-sans font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mt-1">Days</span>
+                                    </div>
+                                    <div class="flex flex-col border-l border-slate-200/70 dark:border-slate-800/80">
+                                        <span data-unit="hours" class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-800 dark:text-slate-100">${t.hours}</span>
+                                        <span class="text-[10px] font-sans font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mt-1">Hours</span>
+                                    </div>
+                                    <div class="flex flex-col border-l border-slate-200/70 dark:border-slate-800/80">
+                                        <span data-unit="minutes" class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-800 dark:text-slate-100">${t.minutes}</span>
+                                        <span class="text-[10px] font-sans font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mt-1">Mins</span>
+                                    </div>
+                                    <div class="flex flex-col border-l border-slate-200/70 dark:border-slate-800/80">
+                                        <div class="flex items-baseline justify-center">
+                                            <span data-unit="seconds" class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-800 dark:text-slate-100">${t.seconds}</span>
+                                            <span data-unit="centiseconds" class="text-xs sm:text-sm font-semibold text-indigo-500 dark:text-indigo-400 ml-0.5">.${t.centiseconds}</span>
+                                        </div>
+                                        <span class="text-[10px] font-sans font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mt-1">Secs</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card Controls: Play/Pause & Reset -->
+                            <div class="grid grid-cols-3 gap-2.5 mt-4">
+                                <button type="button" data-action="toggle" class="col-span-2 inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition shadow-sm ${
+                                    isRunning 
+                                        ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/20' 
+                                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20'
+                                }">
+                                    ${isRunning 
+                                        ? `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg><span>Pause</span>`
+                                        : `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span>${elapsed > 0 ? 'Resume' : 'Start'}</span>`
+                                    }
+                                </button>
+
+                                <button type="button" data-action="reset" ${elapsed === 0 && !isRunning ? 'disabled' : ''} class="col-span-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none transition">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                    <span>Reset</span>
+                                </button>
+                            </div>
+                        </article>
+                    `;
+                }).join('');
+            }
+
+            /**
+             * High-Frequency UI Tick Loop (updates only text nodes for smooth 60fps performance)
+             */
+            function updateRunningDisplays() {
+                for (let i = 0; i < stopwatches.length; i++) {
+                    const sw = stopwatches[i];
+                    if (!sw.isRunning) continue;
+
+                    const card = gridEl.querySelector(`article[data-id="${sw.id}"]`);
+                    if (!card) continue;
+
+                    const t = formatTimeParts(getElapsedMs(sw));
+                    const daysEl = card.querySelector('[data-unit="days"]');
+                    const hoursEl = card.querySelector('[data-unit="hours"]');
+                    const minsEl = card.querySelector('[data-unit="minutes"]');
+                    const secsEl = card.querySelector('[data-unit="seconds"]');
+                    const csEl = card.querySelector('[data-unit="centiseconds"]');
+
+                    if (daysEl.textContent !== t.days) {
+                        daysEl.textContent = t.days;
+                        if (t.hasDays) {
+                            daysEl.classList.add('text-indigo-600', 'dark:text-indigo-400');
+                            daysEl.classList.remove('text-slate-800', 'dark:text-slate-100');
+                        }
+                    }
+                    if (hoursEl.textContent !== t.hours) hoursEl.textContent = t.hours;
+                    if (minsEl.textContent !== t.minutes) minsEl.textContent = t.minutes;
+                    if (secsEl.textContent !== t.seconds) secsEl.textContent = t.seconds;
+                    if (csEl.textContent !== '.' + t.centiseconds) csEl.textContent = '.' + t.centiseconds;
+                }
+
+                animationFrameId = requestAnimationFrame(updateRunningDisplays);
+            }
+
+            /**
+             * Modal Helpers (Add & Edit)
+             */
+            function openCreateModal() {
+                modalTitle.textContent = 'New Stopwatch';
+                modalEditId.value = '';
+                modalName.value = '';
+                modalDesc.value = '';
+                modalAutostart.checked = false;
+                modalAutostartWrap.classList.remove('hidden');
+                modalSubmitBtn.textContent = 'Create Stopwatch';
+
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => modalName.focus(), 50);
+            }
+
+            function openEditModal(id) {
+                const sw = stopwatches.find(item => item.id === id);
+                if (!sw) return;
+
+                modalTitle.textContent = 'Edit Stopwatch';
+                modalEditId.value = sw.id;
+                modalName.value = sw.name;
+                modalDesc.value = sw.description || '';
+                modalAutostartWrap.classList.add('hidden');
+                modalSubmitBtn.textContent = 'Save Changes';
+
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => modalName.focus(), 50);
+            }
+
+            function closeModal() {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+
+            /**
+             * Event Listeners
+             */
+            function bindEvents() {
+                // Theme Toggles
+                document.getElementById('theme-toggle-desktop').addEventListener('click', toggleTheme);
+                document.getElementById('theme-toggle-mobile').addEventListener('click', toggleTheme);
+
+                // Global Controls
+                btnPauseAll.addEventListener('click', pauseAllStopwatches);
+                btnResetAll.addEventListener('click', resetAllStopwatches);
+                document.getElementById('btn-open-modal').addEventListener('click', openCreateModal);
+                document.getElementById('btn-empty-create').addEventListener('click', openCreateModal);
+
+                // Quick Add Form
+                quickAddForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const name = quickNameInput.value.trim();
+                    if (!name) return;
+                    createStopwatch(name, quickDescInput.value, false);
+                    quickNameInput.value = '';
+                    quickDescInput.value = '';
+                });
+
+                // Grid Event Delegation (Play/Pause, Reset, Edit, Delete)
+                gridEl.addEventListener('click', (e) => {
+                    const card = e.target.closest('article[data-id]');
+                    if (!card) return;
+                    const id = card.dataset.id;
+
+                    // Clicking title opens edit modal
+                    if (e.target.closest('.sw-title')) {
+                        openEditModal(id);
+                        return;
+                    }
+
+                    const btn = e.target.closest('button[data-action]');
+                    if (!btn) return;
+
+                    const action = btn.dataset.action;
+                    if (action === 'toggle') toggleStopwatch(id);
+                    else if (action === 'reset') resetStopwatch(id);
+                    else if (action === 'edit') openEditModal(id);
+                    else if (action === 'delete') deleteStopwatch(id);
+                });
+
+                // Add/Edit Modal Events
+                document.getElementById('modal-close').addEventListener('click', closeModal);
+                document.getElementById('modal-cancel').addEventListener('click', closeModal);
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) closeModal();
+                });
+
+                modalForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const editId = modalEditId.value;
+                    const name = modalName.value;
+                    const desc = modalDesc.value;
+
+                    if (editId) {
+                        updateStopwatchDetails(editId, name, desc);
+                    } else {
+                        createStopwatch(name, desc, modalAutostart.checked);
+                    }
+                    closeModal();
+                });
+
+                // Confirm Modal Events
+                confirmCancelBtn.addEventListener('click', closeConfirm);
+                confirmOkBtn.addEventListener('click', () => {
+                    if (typeof confirmCallback === 'function') {
+                        confirmCallback();
+                    }
+                    closeConfirm();
+                });
+                confirmModal.addEventListener('click', (e) => {
+                    if (e.target === confirmModal) closeConfirm();
+                });
+
+                // Escape key closes modals
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        closeModal();
+                        closeConfirm();
+                    }
+                });
+            }
+
+            // Bootstrap Application
+            initTheme();
+            loadState();
+            bindEvents();
+            renderGrid();
+            animationFrameId = requestAnimationFrame(updateRunningDisplays);
+        })();
+    </script>
+</body>
+</html>
